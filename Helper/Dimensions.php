@@ -1,0 +1,253 @@
+<?php
+
+namespace Swissup\Image\Helper;
+
+use \Magento\Framework\UrlInterface;
+use \Magento\Framework\App\Filesystem\DirectoryList;
+
+class Dimensions extends \Magento\Framework\App\Helper\AbstractHelper
+{
+    /**
+     * @var array
+     */
+    private $memo = [];
+
+    /**
+     * @var \Magento\Framework\App\View\Deployment\Version
+     */
+    private $deploymentVersion;
+
+    /**
+     * @var \Magento\Framework\Filesystem
+     */
+    private $filesystem;
+
+    /**
+     * @var \Magento\Framework\Filesystem\Driver\File
+     */
+    private $file;
+
+    /**
+     * @var \Magento\Framework\HTTP\Adapter\CurlFactory
+     */
+    private $curlFactory;
+
+    /**
+     * @var \FastImageSize\FastImageSize
+     */
+    private $remoteImage;
+
+    /**
+     * @param \Magento\Framework\App\Helper\Context $context
+     * @param \Magento\Framework\App\View\Deployment\Version $deploymentVersion
+     * @param \Magento\Framework\Filesystem $filesystem
+     * @param \Magento\Framework\Filesystem\Driver\File $file
+     * @param \Magento\Framework\HTTP\Adapter\CurlFactory $curlFactory
+     * @param \FastImageSize\FastImageSize $remoteImage
+     */
+    public function __construct(
+        \Magento\Framework\App\Helper\Context $context,
+        \Magento\Framework\App\View\Deployment\Version $deploymentVersion,
+        \Magento\Framework\Filesystem $filesystem,
+        \Magento\Framework\Filesystem\Driver\File $file,
+        \Magento\Framework\HTTP\Adapter\CurlFactory $curlFactory,
+        \FastImageSize\FastImageSize $remoteImage
+    ) {
+        $this->deploymentVersion = $deploymentVersion;
+        $this->filesystem = $filesystem;
+        $this->file = $file;
+        $this->curlFactory = $curlFactory;
+        $this->remoteImage = $remoteImage;
+        parent::__construct($context);
+    }
+
+    /**
+     * @param  string $url Image url or path
+     * @return int|float
+     */
+    public function getWidth($url)
+    {
+        $dimensions = $this->getDimensions($url);
+
+        return $dimensions[0];
+    }
+
+    /**
+     * @param  string $url Image url or path
+     * @return int|float
+     */
+    public function getHeight($url)
+    {
+        $dimensions = $this->getDimensions($url);
+
+        return $dimensions[1];
+    }
+
+    /**
+     * @param  string $url Image url or path
+     * @return array
+     */
+    public function getDimensions($url)
+    {
+        if (!empty($this->memo[$url])) {
+            return $this->memo[$url];
+        }
+
+        if (substr($url, -4) === '.svg') {
+            $dimensions = $this->getSvgDimensions($url);
+        } else {
+            $dimensions = $this->getImageDimensions($url);
+        }
+
+        $this->memo[$url] = $dimensions ?: [0, 0];
+
+        return $this->memo[$url];
+    }
+
+    /**
+     * Get image dimensions
+     *
+     * 1. Try to locate image locally and use getimagesize
+     * 2. Use FastImageSize lib to detect remote image dimensions
+     *
+     * @param string $url
+     * @return array|false
+     */
+    private function getImageDimensions($url)
+    {
+        $path = $this->convertUrlToPath($url);
+
+        if (file_exists($path)) {
+            $dimensions = getimagesize($path);
+        } else {
+            $dimensions = $this->remoteImage->getImageSize($url);
+            if ($dimensions) {
+                $dimensions = array_values($dimensions);
+            }
+        }
+
+        return $dimensions;
+    }
+
+    /**
+     * @param string $url
+     * @return array|false
+     * @see https://github.com/contao/imagine-svg/blob/master/src/Image.php#L245-L281
+     */
+    private function getSvgDimensions($url)
+    {
+        $data = false;
+        $path = $this->convertUrlToPath($url);
+
+        if (file_exists($path)) {
+            try {
+                $data = $this->file->fileGetContents($path);
+            } catch (\Exception $e) {
+                return false;
+            }
+        } elseif ($this->isUrl($url)) {
+            $curl = $this->curlFactory->create()->setConfig([
+                'header' => false,
+                'verifypeer' => false,
+            ]);
+            $curl->write('GET', $url);
+
+            $data = $curl->read();
+            $responseCode = (int) $curl->getInfo(CURLINFO_HTTP_CODE);
+
+            $curl->close();
+
+            if ($responseCode !== 200) {
+                return false;
+            }
+        }
+
+        if (!$data) {
+            return false;
+        }
+
+        $document = new \DOMDocument();
+        $document->loadXML($data, LIBXML_NONET);
+        $svg = $document->documentElement;
+
+        if (!$svg || 'svg' !== strtolower($svg->tagName)) {
+            return false;
+        }
+
+        $width = (float) $svg->getAttribute('width');
+        $height = (float) $svg->getAttribute('height');
+
+        if ($width && $height) {
+            return [$width, $height];
+        }
+
+        $viewBox = preg_split('/[\s,]+/', $svg->getAttribute('viewBox') ?: '');
+        $viewBoxWidth = (float) ($viewBox[2] ?? 0);
+        $viewBoxHeight = (float) ($viewBox[3] ?? 0);
+
+        return [$viewBoxWidth, $viewBoxHeight];
+    }
+
+    /**
+     * @param string $string
+     * @return boolean
+     */
+    private function isUrl($string)
+    {
+        return strpos($string, 'http') === 0;
+    }
+
+    /**
+     * @param string $url
+     * @return string
+     */
+    private function convertUrlToPath($url)
+    {
+        if (!$this->isUrl($url)) {
+            return $url;
+        }
+
+        $rootPath = $this->filesystem
+            ->getDirectoryRead(DirectoryList::ROOT)
+            ->getAbsolutePath();
+
+        // Replace domain name with root path
+        $localPath = str_replace(
+            [
+                $this->_urlBuilder->getBaseUrl([
+                    '_type' => UrlInterface::URL_TYPE_DIRECT_LINK
+                ]),
+                $this->_urlBuilder->getBaseUrl([
+                    '_type' => UrlInterface::URL_TYPE_DIRECT_LINK,
+                    '_secure' => true
+                ])
+            ],
+            $rootPath,
+            $url
+        );
+
+        // Remove '/version...' from the path to the static image
+        if ($this->scopeConfig->getValue('dev/static/sign') &&
+            strpos($localPath, '/static/version') !== false
+        ) {
+            $localPath = str_replace(
+                'static/version' . $this->deploymentVersion->getValue(),
+                'static',
+                $localPath
+            );
+        }
+
+        // Add 'pub/' to the path
+        $rules = [
+            $rootPath . 'media/' => $rootPath . 'pub/media/',
+            $rootPath . 'static/' => $rootPath . 'pub/static/',
+        ];
+        $localPath = str_replace(
+            array_keys($rules),
+            array_values($rules),
+            $localPath
+        );
+
+        return $localPath;
+    }
+}

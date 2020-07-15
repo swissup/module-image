@@ -12,3 +12,13 @@ wbmpm, webp.
 composer require swissup/module-image
 bin/magento setup:upgrade
 ```
+
+## Usage
+
+```php
+use Swissup\Image\Helper\Dimensions;
+
+$this->dimensions->getWidth($imageUrl);      // 600
+$this->dimensions->getHeight($imageUrl);     // 400
+$this->dimensions->getDimensions($imageUrl); // [600, 400]
+```
