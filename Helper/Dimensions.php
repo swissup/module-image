@@ -69,7 +69,7 @@ class Dimensions extends \Magento\Framework\App\Helper\AbstractHelper
     {
         $dimensions = $this->getDimensions($url);
 
-        return $dimensions[0];
+        return $dimensions['width'];
     }
 
     /**
@@ -80,7 +80,7 @@ class Dimensions extends \Magento\Framework\App\Helper\AbstractHelper
     {
         $dimensions = $this->getDimensions($url);
 
-        return $dimensions[1];
+        return $dimensions['height'];
     }
 
     /**
@@ -99,7 +99,14 @@ class Dimensions extends \Magento\Framework\App\Helper\AbstractHelper
             $dimensions = $this->getImageDimensions($url);
         }
 
-        $this->memo[$url] = $dimensions ?: [0, 0];
+        if (!$dimensions) {
+            $dimensions = [0, 0];
+        }
+
+        $this->memo[$url] = [
+            'width' => $dimensions[0],
+            'height' => $dimensions[1],
+        ];
 
         return $this->memo[$url];
     }

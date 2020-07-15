@@ -20,5 +20,5 @@ use Swissup\Image\Helper\Dimensions;
 
 $this->dimensions->getWidth($imageUrl);      // 600
 $this->dimensions->getHeight($imageUrl);     // 400
-$this->dimensions->getDimensions($imageUrl); // [600, 400]
+$this->dimensions->getDimensions($imageUrl); // ['width' => 600, 'height' => 400]
 ```
