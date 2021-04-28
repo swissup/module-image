@@ -4,6 +4,8 @@ namespace Swissup\Image\Helper;
 
 use \Magento\Framework\UrlInterface;
 use \Magento\Framework\App\Filesystem\DirectoryList;
+use \Magento\Store\Model\Store;
+use \Magento\Store\Model\ScopeInterface;
 
 class Dimensions extends \Magento\Framework\App\Helper\AbstractHelper
 {
@@ -38,12 +40,18 @@ class Dimensions extends \Magento\Framework\App\Helper\AbstractHelper
     private $remoteImage;
 
     /**
+     * @var bool
+     */
+    private $isCustomEntryPoint = false;
+
+    /**
      * @param \Magento\Framework\App\Helper\Context $context
      * @param \Magento\Framework\App\View\Deployment\Version $deploymentVersion
      * @param \Magento\Framework\Filesystem $filesystem
      * @param \Magento\Framework\Filesystem\Driver\File $file
      * @param \Magento\Framework\HTTP\Adapter\CurlFactory $curlFactory
      * @param \FastImageSize\FastImageSize $remoteImage
+     * @param bool $isCustomEntryPoint
      */
     public function __construct(
         \Magento\Framework\App\Helper\Context $context,
@@ -51,13 +59,15 @@ class Dimensions extends \Magento\Framework\App\Helper\AbstractHelper
         \Magento\Framework\Filesystem $filesystem,
         \Magento\Framework\Filesystem\Driver\File $file,
         \Magento\Framework\HTTP\Adapter\CurlFactory $curlFactory,
-        \FastImageSize\FastImageSize $remoteImage
+        \FastImageSize\FastImageSize $remoteImage,
+        $isCustomEntryPoint = false
     ) {
         $this->deploymentVersion = $deploymentVersion;
         $this->filesystem = $filesystem;
         $this->file = $file;
         $this->curlFactory = $curlFactory;
         $this->remoteImage = $remoteImage;
+        $this->isCustomEntryPoint = $isCustomEntryPoint;
         parent::__construct($context);
     }
 
@@ -208,6 +218,16 @@ class Dimensions extends \Magento\Framework\App\Helper\AbstractHelper
     }
 
     /**
+     * Check if used entry point is custom
+     *
+     * @return bool
+     */
+    private function isCustomEntryPoint()
+    {
+        return $this->isCustomEntryPoint;
+    }
+
+    /**
      * @param string $url
      * @return string
      */
@@ -221,17 +241,37 @@ class Dimensions extends \Magento\Framework\App\Helper\AbstractHelper
             ->getDirectoryRead(DirectoryList::ROOT)
             ->getAbsolutePath();
 
+        $baseUrls = [
+            $this->_urlBuilder->getBaseUrl([
+                '_type' => UrlInterface::URL_TYPE_DIRECT_LINK,
+            ]),
+            $this->_urlBuilder->getBaseUrl([
+                '_type' => UrlInterface::URL_TYPE_DIRECT_LINK,
+                '_secure' => true
+            ])
+        ];
+
+        // Remove scriptname (index.php) from baseUrl \Magento\Store\Model\Store::_updatePathUseRewrites
+        $isUseRewite = $this->scopeConfig->isSetFlag(
+            Store::XML_PATH_USE_REWRITES,
+            ScopeInterface::SCOPE_STORE
+        );
+        if (!$isUseRewite) {
+            if ($this->isCustomEntryPoint()) {
+                $indexFileName = 'index.php';
+            } else {
+                $scriptFilename = $this->_request->getServer('SCRIPT_FILENAME');
+                // phpcs:ignore Magento2.Functions.DiscouragedFunction
+                $indexFileName = basename($scriptFilename);
+            }
+            foreach ($baseUrls as &$baseUrl) {
+                $baseUrl = preg_replace("/{$indexFileName}\/$/", '', $baseUrl);
+            }
+        }
+
         // Replace domain name with root path
         $localPath = str_replace(
-            [
-                $this->_urlBuilder->getBaseUrl([
-                    '_type' => UrlInterface::URL_TYPE_DIRECT_LINK
-                ]),
-                $this->_urlBuilder->getBaseUrl([
-                    '_type' => UrlInterface::URL_TYPE_DIRECT_LINK,
-                    '_secure' => true
-                ])
-            ],
+            $baseUrls,
             $rootPath,
             $url
         );
