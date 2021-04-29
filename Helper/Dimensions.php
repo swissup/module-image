@@ -252,11 +252,11 @@ class Dimensions extends \Magento\Framework\App\Helper\AbstractHelper
         ];
 
         // Remove scriptname (index.php) from baseUrl \Magento\Store\Model\Store::_updatePathUseRewrites
-        $isUseRewite = $this->scopeConfig->isSetFlag(
+        $isUseRewrite = $this->scopeConfig->isSetFlag(
             Store::XML_PATH_USE_REWRITES,
             ScopeInterface::SCOPE_STORE
         );
-        if (!$isUseRewite) {
+        if (!$isUseRewrite) {
             if ($this->isCustomEntryPoint()) {
                 $indexFileName = 'index.php';
             } else {
