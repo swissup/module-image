@@ -186,9 +186,13 @@ class Dimensions extends \Magento\Framework\App\Helper\AbstractHelper
             return false;
         }
 
-        $document = new \DOMDocument();
-        $document->loadXML($data, LIBXML_NONET);
-        $svg = $document->documentElement;
+        try {
+            $document = new \DOMDocument();
+            $document->loadXML($data, LIBXML_NONET);
+            $svg = $document->documentElement;
+        } catch (\Exception $e) {
+            return false;
+        }
 
         if (!$svg || 'svg' !== strtolower($svg->tagName)) {
             return false;
