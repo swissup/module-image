@@ -205,7 +205,7 @@ class Dimensions extends \Magento\Framework\App\Helper\AbstractHelper
             return [$width, $height];
         }
 
-        $viewBox = preg_split('/[\s,]+/', $svg->getAttribute('viewBox') ?: '');
+        $viewBox = preg_split('/[\s,]+/', $svg->getAttribute('viewBox') ?: '', -1);
         $viewBoxWidth = (float) ($viewBox[2] ?? 0);
         $viewBoxHeight = (float) ($viewBox[3] ?? 0);
 
