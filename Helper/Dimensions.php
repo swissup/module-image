@@ -135,7 +135,10 @@ class Dimensions extends \Magento\Framework\App\Helper\AbstractHelper
         $path = $this->convertUrlToPath($url);
 
         if (file_exists($path)) {
-            if (is_dir($path) || 0 == filesize($path)) {
+            if (is_dir($path) ||
+                !is_readable($path) ||
+                0 == filesize($path)
+            ) {
                 return false;
             }
             $dimensions = getimagesize($path);
