@@ -27,7 +27,7 @@ class Dimensions extends \Magento\Framework\App\Helper\AbstractHelper
     /**
      * @var \Magento\Framework\Filesystem\Driver\File
      */
-    private $file;
+    private $fileDriver;
 
     /**
      * @var \Magento\Framework\HTTP\Adapter\CurlFactory
@@ -48,7 +48,7 @@ class Dimensions extends \Magento\Framework\App\Helper\AbstractHelper
      * @param \Magento\Framework\App\Helper\Context $context
      * @param \Magento\Framework\App\View\Deployment\Version $deploymentVersion
      * @param \Magento\Framework\Filesystem $filesystem
-     * @param \Magento\Framework\Filesystem\Driver\File $file
+     * @param \Magento\Framework\Filesystem\Driver\File $fileDriver
      * @param \Magento\Framework\HTTP\Adapter\CurlFactory $curlFactory
      * @param \FastImageSize\FastImageSize $remoteImage
      * @param bool $isCustomEntryPoint
@@ -57,14 +57,14 @@ class Dimensions extends \Magento\Framework\App\Helper\AbstractHelper
         \Magento\Framework\App\Helper\Context $context,
         \Magento\Framework\App\View\Deployment\Version $deploymentVersion,
         \Magento\Framework\Filesystem $filesystem,
-        \Magento\Framework\Filesystem\Driver\File $file,
+        \Magento\Framework\Filesystem\Driver\File $fileDriver,
         \Magento\Framework\HTTP\Adapter\CurlFactory $curlFactory,
         \FastImageSize\FastImageSize $remoteImage,
         $isCustomEntryPoint = false
     ) {
         $this->deploymentVersion = $deploymentVersion;
         $this->filesystem = $filesystem;
-        $this->file = $file;
+        $this->fileDriver = $fileDriver;
         $this->curlFactory = $curlFactory;
         $this->remoteImage = $remoteImage;
         $this->isCustomEntryPoint = $isCustomEntryPoint;
@@ -134,9 +134,9 @@ class Dimensions extends \Magento\Framework\App\Helper\AbstractHelper
     {
         $path = $this->convertUrlToPath($url);
 
-        if (file_exists($path)) {
-            if (is_dir($path) ||
-                !is_readable($path) ||
+        if ($this->fileDriver->isExists($path)) {
+            if ($this->fileDriver->isDirectory($path) ||
+                !$this->fileDriver->isReadable($path) ||
                 0 == filesize($path)
             ) {
                 return false;
@@ -162,9 +162,9 @@ class Dimensions extends \Magento\Framework\App\Helper\AbstractHelper
         $data = false;
         $path = $this->convertUrlToPath($url);
 
-        if (file_exists($path)) {
+        if ($this->fileDriver->isExists($path)) {
             try {
-                $data = $this->file->fileGetContents($path);
+                $data = $this->fileDriver->fileGetContents($path);
             } catch (\Exception $e) {
                 return false;
             }
